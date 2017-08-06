@@ -2,23 +2,10 @@ package dbobj
 
 import (
 	"database/sql"
-	"fmt"
-	"io/ioutil"
-	"os"
 	"testing"
-	"testing/iotest"
 	"time"
 
 	"github.com/paulstuart/dbutil"
-)
-
-const (
-	default_query = "select id,name,kind,modified from structs"
-)
-
-var (
-	test_file = "test.db"
-	w         = iotest.NewWriteLogger("", os.Stderr)
 )
 
 type testStruct struct {
@@ -85,7 +72,7 @@ func (s *testStruct) ModifiedBy(u int64, t time.Time) {
 	s.Modified = t
 }
 
-const struct_sql = `create table if not exists structs (
+const queryCreate = `create table if not exists structs (
     id integer not null primary key,
     name text,
     kind int,
@@ -94,11 +81,6 @@ const struct_sql = `create table if not exists structs (
 );`
 
 type testMap map[int64]testStruct
-
-func init() {
-	os.Remove(test_file)
-
-}
 
 func structDb(t *testing.T) *sql.DB {
 	db, err := dbutil.Open(":memory:", true)
@@ -201,7 +183,8 @@ func TestDBObject(t *testing.T) {
 		t.Fatal(err)
 	}
 	z := testStruct{}
-	if err := db.Find(&z, QueryKeys{"kind": 2015}); err != nil {
+	m := map[string]interface{}{"kind": 2015}
+	if err := db.Find(&z, m); err != nil {
 		t.Fatal(err)
 	}
 
@@ -210,36 +193,17 @@ func TestDBObject(t *testing.T) {
 	}
 }
 
-func TestLoadMap(t *testing.T) {
-	db := structDBU(t)
-	results := db.LoadMap(testMap{}, "select * from structs").(testMap)
-	for k, v := range results {
-		t.Log("K:", k, "V:", v)
-	}
-}
-
-type Writer struct {
-	Prefix string
-}
-
-func (w *Writer) Write(p []byte) (n int, err error) {
-	/*
-		fmt.Print(w.Prefix)
-		return fmt.Print(string(p))
-	*/
-	return fmt.Fprint(ioutil.Discard, string(p))
-}
-
 func testDBU(t *testing.T) *sql.DB {
 	return nil
 }
 
 func prepare(db *sql.DB) {
-	dbutil.Exec(db, struct_sql)
-	dbutil.Exec(db, "insert into structs(name, kind, data) values(?,?,?)", "abc", 23, "what ev er")
-	dbutil.Exec(db, "insert into structs(name, kind, data) values(?,?,?)", "def", 69, "m'kay")
-	dbutil.Exec(db, "insert into structs(name, kind, data) values(?,?,?)", "hij", 42, "meaning of life")
-	dbutil.Exec(db, "insert into structs(name, kind, data) values(?,?,?)", "klm", 2, "of a kind")
+	const queryInsert = "insert into structs(name, kind, data) values(?,?,?)"
+	dbutil.Exec(db, queryCreate)
+	dbutil.Exec(db, queryInsert, "abc", 23, "what ev er")
+	dbutil.Exec(db, queryInsert, "def", 69, "m'kay")
+	dbutil.Exec(db, queryInsert, "hij", 42, "meaning of life")
+	dbutil.Exec(db, queryInsert, "klm", 2, "of a kind")
 }
 
 func dump(t *testing.T, db *sql.DB, query string, args ...interface{}) {
