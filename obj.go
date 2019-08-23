@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/paulstuart/dbutil"
+	"github.com/paulstuart/sqlite"
 	"github.com/pkg/errors"
 )
 
@@ -201,12 +202,7 @@ func (db DBU) ListQuery(obj DBObject, extra string, args ...interface{}) (interf
 
 // NewDBU returns a new DBU
 func NewDBU(file string, init bool) (DBU, error) {
-	return NewDBUWithHook(file, "", init)
-}
-
-// NewDBUWithHook returns a DBU with custom connection hook
-func NewDBUWithHook(file, hook string, init bool) (DBU, error) {
-	db, err := dbutil.OpenWithHook(file, hook, init)
+	db, err := sqlite.Open(file)
 	return DBU{DB: db}, err
 }
 
