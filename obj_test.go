@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/paulstuart/dbutil"
+	"github.com/paulstuart/sqlite"
 )
 
 type testStruct struct {
@@ -83,7 +84,7 @@ const queryCreate = `create table if not exists structs (
 type testMap map[int64]testStruct
 
 func structDb(t *testing.T) *sql.DB {
-	db, err := dbutil.Open(":memory:", true)
+	db, err := sqlite.Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
