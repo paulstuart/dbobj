@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/paulstuart/dbutil"
 	"github.com/paulstuart/sqlite"
 )
 
@@ -200,11 +199,11 @@ func testDBU(t *testing.T) *sql.DB {
 
 func prepare(db *sql.DB) {
 	const queryInsert = "insert into structs(name, kind, data) values(?,?,?)"
-	dbutil.Exec(db, queryCreate)
-	dbutil.Exec(db, queryInsert, "abc", 23, "what ev er")
-	dbutil.Exec(db, queryInsert, "def", 69, "m'kay")
-	dbutil.Exec(db, queryInsert, "hij", 42, "meaning of life")
-	dbutil.Exec(db, queryInsert, "klm", 2, "of a kind")
+	db.Exec(queryCreate)
+	db.Exec(queryInsert, "abc", 23, "what ev er")
+	db.Exec(queryInsert, "def", 69, "m'kay")
+	db.Exec(queryInsert, "hij", 42, "meaning of life")
+	db.Exec(queryInsert, "klm", 2, "of a kind")
 }
 
 func dump(t *testing.T, db *sql.DB, query string, args ...interface{}) {

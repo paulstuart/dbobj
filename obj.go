@@ -5,24 +5,33 @@ import (
 	"fmt"
 	"log"
 	"reflect"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/paulstuart/dbutil"
 	"github.com/paulstuart/sqlite"
 	"github.com/pkg/errors"
 )
 
 var (
 	// ErrNoKeyField is returned for tables without primary key identified
-	ErrNoKeyField = fmt.Errorf("table has no key field")
+	ErrNoKeyField = errors.New("table has no key field")
 
 	// ErrKeyMissing is returned when key value is not set
-	ErrKeyMissing = fmt.Errorf("key is not set")
-
-	numeric = regexp.MustCompile("^[0-9]+(\\.[0-9])?$")
+	ErrKeyMissing = errors.New("key is not set")
 )
+
+// SetHandler takes a slice of value pointer interfaces
+// and returns an error if unable to set the values
+type SetHandler func(...interface{}) error
+
+// ExecHandler takes a slice of value pointer interfaces
+// and returns an error if unable to set the values
+//type ExecHandler func(RowsAffected, LastInsertID int64) error
+
+type DBS interface {
+	Query(fn SetHandler, query string, args ...interface{}) error
+	Exec(query string, args ...interface{}) (RowsAffected, LastInsertID int64, err error)
+}
 
 // DBU is a DatabaseUnit
 type DBU struct {
@@ -42,11 +51,60 @@ func (db DBU) debugf(msg string, args ...interface{}) {
 	}
 }
 
-// DBObject has these following methods
+/*
+	DBU.Load(Loader, keys...)
+
+*/
+
+// Rows is copied from rqlite
+type Rows struct {
+	Columns []string        `json:"columns,omitempty"`
+	Types   []string        `json:"types,omitempty"`
+	Values  [][]interface{} `json:"values,omitempty"`
+	Error   string          `json:"error,omitempty"`
+	Time    float64         `json:"time,omitempty"`
+}
+
+type Loader interface {
+	// SQLGet generates a plain SQL query
+	// (no placeholders or parameter binding)
+	SQLGet(keys ...interface{}) string
+	SQLResults(values ...interface{}) error
+	// generate query string
+	// run query
+	// apply query results to object
+}
+
+/*
+ query := myObj.SQLGet(id)
+ results := qyObj.
+*/
+
+//
+// ***** rqlite ******
+//
+// generate plain text (no binding) queries
+// Need to generate plain text (no binding) queries
+/*
+func (m *myObj) (
+*/
+
+// DBObject provides methods for object storage
 type DBObject interface {
+	// TableName is the name of the sql table
 	TableName() string
+
+	// KeyFields are the names of the table fields
+	// comprising the primary id
+	//KeyFields() []string
 	KeyField() string
+
+	// KeyNames are the struct names of the
+	// primary id fields
+	//KeyNames() []string
 	KeyName() string
+
+	// Names returns the struct names
 	Names() []string
 	SelectFields() string
 	InsertFields() string
@@ -372,11 +430,12 @@ func (db DBU) ObjectDelete(obj interface{}) error {
 		return ErrNoKeyField
 	}
 	query := fmt.Sprintf("delete from %s where %s=?", table, key)
-	rec, _, err := dbutil.Exec(db.DB, query, id)
+	rec, err := db.DB.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("BAD QUERY:%s ID:%v ERROR:%v", query, id, err)
 	}
-	if rec == 0 {
+	rows, _ := rec.RowsAffected()
+	if rows == 0 {
 		return fmt.Errorf("No record deleted for id: %v", id)
 	}
 	return nil
