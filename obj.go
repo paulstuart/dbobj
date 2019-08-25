@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/paulstuart/sqlite"
 	"github.com/pkg/errors"
 )
 
@@ -20,13 +19,12 @@ var (
 	ErrKeyMissing = errors.New("key is not set")
 )
 
+// SQLDB is a common interface for opening an sql db
+type SQLDB func(string) (*sql.DB, error)
+
 // SetHandler takes a slice of value pointer interfaces
 // and returns an error if unable to set the values
 type SetHandler func(...interface{}) error
-
-// ExecHandler takes a slice of value pointer interfaces
-// and returns an error if unable to set the values
-//type ExecHandler func(RowsAffected, LastInsertID int64) error
 
 type DBS interface {
 	Query(fn SetHandler, query string, args ...interface{}) error
@@ -259,8 +257,8 @@ func (db DBU) ListQuery(obj DBObject, extra string, args ...interface{}) (interf
 }
 
 // NewDBU returns a new DBU
-func NewDBU(file string, init bool) (DBU, error) {
-	db, err := sqlite.Open(file)
+func NewDBU(file string, init bool, opener SQLDB) (DBU, error) {
+	db, err := opener(file)
 	return DBU{DB: db}, err
 }
 
