@@ -74,13 +74,6 @@ func (s *testStruct) ModifiedBy(u int64, t time.Time) {
 	s.Modified = t
 }
 
-/*
-func (s *testStruct) ListInit() []DBObject {
-	v := []testStruct{}
-	return v
-}
-*/
-
 type testStrings struct {
 	ID       int64     `sql:"id" key:"true" table:"structs"`
 	Name     string    `sql:"name"`
@@ -108,6 +101,15 @@ func structDb(t *testing.T) DBS {
 	}
 	prepare(db)
 	return sqlWrapper{db}
+}
+
+func structRqlite(t *testing.T) DBU {
+	dbs, err := NewRqlite("http://localhost:4001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepareRqlite(dbs.conn)
+	return DBU{dbs: dbs}
 }
 
 func structDBU(t *testing.T) DBU {
@@ -181,10 +183,17 @@ func prepare(db *sql.DB) {
 }
 
 func prepareRqlite(conn *rqlite.Connection) {
-	const queryInsert = "insert into structs(name, kind, data) values('%s',%d, %s')"
+	//const queryInsert = "insert into structs(name, kind, data) values('%s',%d, '%s')"
+	const queryInsert = "insert into structs(name, kind, data) values(%s)"
 	var queries []string
 	prep := func(s string, args ...interface{}) {
-		queries = append(queries, (fmt.Sprintf(s, args...)))
+		//queries = append(queries, (fmt.Sprintf(s, args...)))
+		if len(args) == 0 {
+			queries = append(queries, s)
+			return
+		}
+		query := fmt.Sprintf(s, renderedFields(args...))
+		queries = append(queries, query)
 	}
 	prep(queryCreate)
 	prep(queryInsert, "abc", 23, "what ev er")
@@ -193,13 +202,16 @@ func prepareRqlite(conn *rqlite.Connection) {
 	prep(queryInsert, "jkl", 2, "of a kind")
 	prep(queryInsert, "mno", 2, "of a drag")
 	prep(queryInsert, "pqr", 2, "of a sort")
-	results, err := conn.Write(queries)
+	//results, err := conn.Write(queries)
+	_, err := conn.Write(queries)
 	if err != nil {
 		panic(err)
 	}
-	for _, result := range results {
-		fmt.Printf("RESULT: %+v\n", result)
-	}
+	/*
+		for _, result := range results {
+			fmt.Printf("RESULT: %+v\n", result)
+		}
+	*/
 }
 func dump(t *testing.T, db *sql.DB, query string, args ...interface{}) {
 	rows, err := db.Query(query)
@@ -248,40 +260,14 @@ func (_ *_testStruct) QueryString(where string) string {
 	return fmt.Sprintf("select %s from %s where %s\n", o.SelectFields(), o.TableName(), where)
 }
 
-/*
- */
-
-/*
-
- loop:
-     create a var
-     scan into var ptrs
-     add var to list
-
-*/
-
 func TestListQuery(t *testing.T) {
 	db := structDBU(t)
 	list := new(_testStruct)
-	db.ListQuery(list, "(id % 2) = 0")
+	//db.ListQuery(list, "(id % 2) = 0")
+	db.ListQuery(list, "")
 	for _, item := range *list {
 		t.Logf("ITEM:  %+v\n", item)
 	}
-}
-
-func structRqlite(t *testing.T) DBU {
-	dbs, err := NewRqlite("http://localhost:4001")
-	if err != nil {
-		t.Fatal(err)
-	}
-	prepareRqlite(dbs.conn)
-	/*
-		dbs, err := rqliteWrapper{r.conn}
-		if err != nil {
-			t.Fatal(err)
-		}
-	*/
-	return DBU{dbs: dbs}
 }
 
 func TestRqliteQuery(t *testing.T) {

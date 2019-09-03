@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
@@ -18,6 +19,8 @@ var (
 	ErrKeyMissing = errors.New("key is not set")
 
 	ErrNilWritePointers = errors.New("nil record dest members")
+
+	singleQuote = regexp.MustCompile("'")
 )
 
 // Common Rows object between rqlite and /pkg/database/sql
@@ -38,23 +41,10 @@ type SetHandler func() []interface{}
 // with both rqlite and regular sql.DB connections
 type DBS interface {
 	Query(fn SetHandler, query string, args ...interface{}) error
-	//Query(cmn Common, query string, args ...interface{}) error
 	Exec(query string, args ...interface{}) (RowsAffected, LastInsertID int64, err error)
 }
 
-//
-// TESTING
-//
-// DBx is an abstracted database interface, intended to work
-// with both rqlite and regular sql.DB connections
-type DBx interface {
-	Query(fn Common, query string, args ...interface{}) error
-	Exec(query string, args ...interface{}) (RowsAffected, LastInsertID int64, err error)
-}
-type sqlxWrapper struct {
-	db *sql.DB
-}
-
+// fragment to rethink code structure
 func commonQuery(rows Common, fn SetHandler) error {
 	for rows.Next() {
 		dest := fn()
@@ -72,6 +62,7 @@ type sqlWrapper struct {
 	db *sql.DB
 }
 
+// Query satisfies DBS interface
 func (s sqlWrapper) Query(fn SetHandler, query string, args ...interface{}) error {
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
@@ -90,6 +81,7 @@ func (s sqlWrapper) Query(fn SetHandler, query string, args ...interface{}) erro
 	return nil
 }
 
+// Exec satisfies DBS interface
 func (s sqlWrapper) Exec(query string, args ...interface{}) (rowsAffected, lastInsertID int64, err error) {
 	return 0, 0, nil
 }
@@ -116,6 +108,7 @@ func (db DBU) debugf(msg string, args ...interface{}) {
 
 */
 
+/*
 // Rows is copied from rqlite
 type Rows struct {
 	Columns []string        `json:"columns,omitempty"`
@@ -134,6 +127,7 @@ type Loader interface {
 	// run query
 	// apply query results to object
 }
+*/
 
 /*
  query := myObj.SQLGet(id)
@@ -183,10 +177,38 @@ type DBObject interface {
 	// SetID updates the id of the object
 	SetID(int64)
 
+	// InsertValues returns the values of the object to be inserted
 	InsertValues() []interface{}
+
+	// InsertValues returns the values of the object to be updated
 	UpdateValues() []interface{}
+
+	// MemberPointers  returns a slice of pointers to values
+	// for the db scan function
 	MemberPointers() []interface{}
+
+	// ModifiedBy returns the user id and timestamp of when the object was last modified
 	ModifiedBy(int64, time.Time)
+}
+
+// renderedFields is because rqlite doesn't support bind parameters
+func renderedFields(values ...interface{}) string {
+	var buf strings.Builder
+	for i, value := range values {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		switch value := value.(type) {
+		case string:
+			value = singleQuote.ReplaceAllString(value, "''")
+			buf.WriteString("'")
+			buf.WriteString(fmt.Sprint(value))
+			buf.WriteString("'")
+		default:
+			buf.WriteString(fmt.Sprint(value))
+		}
+	}
+	return buf.String()
 }
 
 func insertFields(o DBObject) string {
@@ -209,7 +231,8 @@ func setParams(params string) string {
 }
 
 func insertQuery(o DBObject) string {
-	p := placeholders(len(o.InsertValues()))
+	//p := placeholders(len(o.InsertValues()))
+	p := renderedFields(o.InsertValues())
 	return fmt.Sprintf("insert into %s (%s) values(%s)", o.TableName(), insertFields(o), p)
 }
 
@@ -306,22 +329,11 @@ func (db DBU) FindSelf(o DBObject) error {
 	return db.FindBy(o, o.KeyField(), o.Key())
 }
 
+// DBList is the interface for a list of db objects
 type DBList interface {
 	QueryString(extra string) string
 	Receivers() []interface{}
 }
-
-/*
-func (db DBU) aListQuery(list DBList, extra string, args ...interface{}) error {
-	fn := func() []interface{} {
-		return list.Receivers()
-	}
-	query := extra
-	return db.dbs.Query(fn, query)
-}
-*/
-
-//type ObjList []DBObject
 
 // ListQuery updates a list of objects
 // TODO: handle args/vs no args for rqlite
@@ -330,7 +342,6 @@ func (db DBU) ListQuery(list DBList, extra string) error {
 		return list.Receivers()
 	}
 	query := list.QueryString(extra)
-	fmt.Println("THE Q:", query)
 	return db.dbs.Query(fn, query)
 }
 
@@ -364,28 +375,3 @@ func (db DBU) get(members []interface{}, query string, args ...interface{}) erro
 	}
 	return nil
 }
-
-/*
-// getter is the low level db wrapper
-func (db DBU) getter(members SetHandler, query string, args ...interface{}) error {
-	if db.log != nil {
-		db.log.Printf("Q:%s A:%v\n", query, args)
-	}
-	rows, err := db.dbs.Query(query, args...)
-	if err != nil {
-		log.Println("error on query: " + query + " -- " + err.Error())
-		return nil
-	}
-	defer rows.Close()
-	for rows.Next() {
-		err = rows.Scan(members...)
-		if err != nil {
-			log.Println("scan error: " + err.Error())
-			log.Println("scan query: "+query+" args:", args)
-			return err
-		}
-		return nil
-	}
-	return nil
-}
-*/
