@@ -5,7 +5,8 @@ import (
 	"os"
 	"testing"
 
-	dbu "github.com/paulstuart/dbutil"
+	//dbu "github.com/paulstuart/dbutil"
+	sqlite "github.com/paulstuart/sqlite"
 )
 
 const (
@@ -19,7 +20,7 @@ func (o *testStruct) IV() []driver.Value {
 func TestInit(t *testing.T) {
 	var err error
 	os.Remove(test_file)
-	test_db, err := dbu.Open(test_file, true)
+	test_db, err := sqlite.Open(test_file)
 	if err != nil {
 		t.Fatal(err)
 	}
