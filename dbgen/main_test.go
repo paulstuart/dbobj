@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	//dbu "github.com/paulstuart/dbutil"
 	sqlite "github.com/paulstuart/sqlite"
 )
 

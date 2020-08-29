@@ -13,13 +13,13 @@
 //	package dbobjs
 //
 // type User struct {
-// 	ID       int64		`sql:"id" key:"true" table:"users"`
-// 	Username string		`sql:"username"`
-// 	First    string		`sql:"firstname"`
-// 	Last     string		`sql:"lastname"`
-// 	Email    string		`sql:"email"`
-// 	Role     int		`sql:"role"`
-// 	UserID   int64		`sql:"userid"    audit:"user"`
+// 	ID       int64	    `sql:"id" key:"true" table:"users"`
+// 	Username string	    `sql:"username"`
+// 	First    string	    `sql:"firstname"`
+// 	Last     string	    `sql:"lastname"`
+// 	Email    string	    `sql:"email"`
+// 	Role     int	    `sql:"role"`
+// 	UserID   int64	    `sql:"userid"    audit:"user"`
 // 	Modified time.Time  `sql:"modified"  audit:"time"`
 // 	Created  time.Time  `sql:"created"  update="false"
 // }
@@ -344,7 +344,7 @@ func (g *Generator) format() []byte {
 	if err != nil {
 		// Should never happen, but can arise when developing this code.
 		// The user can compile the output to see the error.
-		log.Printf("warning: internal error: invalid Go generated: %s", err)
+		log.Printf("warning: internal error: %v invalid Go generated: %s", err, string(g.buf.Bytes()))
 		log.Printf("warning: compile the package to analyze the error")
 		return g.buf.Bytes()
 	}
@@ -675,7 +675,7 @@ func auditString(name, u, t string) string {
 //	[2]: table name
 //	[3]: select fields
 //	[4]: where fields
-const stringSQLGet = `func (o *%[1]s) SQLGet(keys interface{}...) string {
+const stringSQLGet = `func (o *%[1]s) SQLGet(keys ...interface{}) string {
 	return "select %[3]s from %[2]s where %[4]s;"
 }
 

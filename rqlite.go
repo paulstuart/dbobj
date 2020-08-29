@@ -1,3 +1,5 @@
+// +build rqlite
+
 package dbobj
 
 import (
