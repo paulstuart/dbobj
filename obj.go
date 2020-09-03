@@ -239,7 +239,7 @@ func insertQuery(o DBObject) string {
 }
 
 func replaceQuery(o DBObject) string {
-	p := placeholders(len(o.InsertValues()))
+	p := Placeholders(len(o.InsertValues()))
 	return fmt.Sprintf("replace into %s (%s) values(%s)", o.TableName(), insertFields(o), p)
 }
 
@@ -353,8 +353,8 @@ func NewDBU(file string, init bool, opener SQLDB) (DBU, error) {
 	return DBU{dbs: sqlWrapper{db}}, err
 }
 
-// helper to generate sql values placeholders
-func placeholders(n int) string {
+// Placeholders is a helper to generate sql values placeholders
+func Placeholders(n int) string {
 	a := make([]string, n)
 	for i := range a {
 		a[i] = "?"
