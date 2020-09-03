@@ -44,6 +44,7 @@ type DBS interface {
 	Exec(query string, args ...interface{}) (RowsAffected, LastInsertID int64, err error)
 }
 
+/*
 // fragment to rethink code structure
 func commonQuery(rows Common, fn SetHandler) error {
 	for rows.Next() {
@@ -57,6 +58,7 @@ func commonQuery(rows Common, fn SetHandler) error {
 	}
 	return nil
 }
+*/
 
 type sqlWrapper struct {
 	db *sql.DB

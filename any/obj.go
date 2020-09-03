@@ -1,3 +1,5 @@
+// +build why
+
 package dbobj
 
 import (

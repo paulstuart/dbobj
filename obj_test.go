@@ -1,5 +1,3 @@
-//  build nopes
-
 package dbobj
 
 import (
@@ -17,8 +15,8 @@ type testStruct struct {
 	Kind     int       `sql:"kind"`
 	Data     string    `sql:"data"`
 	Modified time.Time `sql:"modified" update:"false"`
-	astring  string
-	anint    int
+	//astring  string
+	//anint    int
 }
 
 func (s *testStruct) Names() []string {
@@ -75,15 +73,18 @@ func (s *testStruct) ModifiedBy(u int64, t time.Time) {
 	s.Modified = t
 }
 
+/*
 type testStrings struct {
 	ID       int64     `sql:"id" key:"true" table:"structs"`
 	Name     string    `sql:"name"`
 	Kind     int       `sql:"kind"`
 	Data     string    `sql:"data"`
 	Modified time.Time `sql:"modified" update:"false"`
-	astring  string
-	anint    int
+		// TODO: test these are not mucked with by dbobj
+		//astring  string
+		//anint    int
 }
+*/
 
 const queryCreate = `create table if not exists structs (
     id integer not null primary key,
@@ -93,7 +94,7 @@ const queryCreate = `create table if not exists structs (
     modified   DATETIME DEFAULT CURRENT_TIMESTAMP
 );`
 
-type testMap map[int64]testStruct
+//type testMap map[int64]testStruct
 
 func structDb(t *testing.T) DBS {
 	db, err := sqlite.Open(":memory:")
@@ -159,21 +160,24 @@ func TestDBObject(t *testing.T) {
 	}
 }
 
+/*
 func testDBU(t *testing.T) *sql.DB {
 	return nil
 }
+*/
 
 func prepare(db *sql.DB) {
 	const queryInsert = "insert into structs(name, kind, data) values(?,?,?)"
-	db.Exec(queryCreate)
-	db.Exec(queryInsert, "abc", 23, "what ev er")
-	db.Exec(queryInsert, "def", 69, "m'kay")
-	db.Exec(queryInsert, "ghi", 42, "meaning of life")
-	db.Exec(queryInsert, "jkl", 2, "of a kind")
-	db.Exec(queryInsert, "mno", 2, "of a drag")
-	db.Exec(queryInsert, "pqr", 2, "of a sort")
+	_, _ = db.Exec(queryCreate)
+	_, _ = db.Exec(queryInsert, "abc", 23, "what ev er")
+	_, _ = db.Exec(queryInsert, "def", 69, "m'kay")
+	_, _ = db.Exec(queryInsert, "ghi", 42, "meaning of life")
+	_, _ = db.Exec(queryInsert, "jkl", 2, "of a kind")
+	_, _ = db.Exec(queryInsert, "mno", 2, "of a drag")
+	_, _ = db.Exec(queryInsert, "pqr", 2, "of a sort")
 }
 
+/*
 func dump(t *testing.T, db *sql.DB, query string, args ...interface{}) {
 	rows, err := db.Query(query)
 	if err != nil {
@@ -189,7 +193,9 @@ func dump(t *testing.T, db *sql.DB, query string, args ...interface{}) {
 	}
 	rows.Close()
 }
+*/
 
+/*
 func errLogger(t *testing.T) chan error {
 	e := make(chan error, 4096)
 	go func() {
@@ -199,12 +205,15 @@ func errLogger(t *testing.T) chan error {
 	}()
 	return e
 }
+*/
 
 type _testStruct []testStruct
 
+/*
 func (list *_testStruct) add() {
 	*list = append(*list, testStruct{})
 }
+*/
 
 func (list *_testStruct) Receivers() []interface{} {
 	*list = append(*list, testStruct{})
@@ -225,7 +234,7 @@ func TestListQuery(t *testing.T) {
 	db := structDBU(t)
 	list := new(_testStruct)
 	//db.ListQuery(list, "(id % 2) = 0")
-	db.ListQuery(list, "")
+	_ = db.ListQuery(list, "")
 	for _, item := range *list {
 		t.Logf("ITEM:  %+v\n", item)
 	}
