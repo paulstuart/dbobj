@@ -12,6 +12,10 @@ type testStruct struct {
 	Created time.Time `sql:"created" update:"false" audit:"time"`
 }
 
+// make lint happy, it can't otherwise detect its use
+// but that's in generated output
+var _ = testStruct{}
+
 const testSchema = `create table teststruct (
 	id integer not null primary key,
 	name text,

@@ -239,3 +239,27 @@ func TestListQuery(t *testing.T) {
 		t.Logf("ITEM:  %+v\n", item)
 	}
 }
+
+func TestInsertMany(t *testing.T) {
+	db := structDBU(t)
+	query := "insert into structs(name, kind, data) values(?, ?, ?)"
+	values := [][]interface{}{
+		{"john", 23, "blah"},
+		{"paul", 42, "blah"},
+		{"george", 99, "blah"},
+		{"ringo", 1, "blah"},
+	}
+	err := db.InsertMany(query, values...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list := new(_testStruct)
+	//db.ListQuery(list, "(id % 2) = 0")
+	err = db.ListQuery(list, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range *list {
+		t.Logf("ITEM:  %+v\n", item)
+	}
+}

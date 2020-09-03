@@ -377,3 +377,33 @@ func (db DBU) get(members []interface{}, query string, args ...interface{}) erro
 	}
 	return nil
 }
+
+// InsertMany inserts multiple records as a single transaction
+func (db DBU) InsertMany(query string, args ...[]interface{}) error {
+	wrap, ok := db.dbs.(sqlWrapper)
+	if !ok {
+		return fmt.Errorf("wrong type: %T", db.dbs)
+	}
+	idb := wrap.db
+	tx, err := idb.Begin()
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(query)
+	if err != nil {
+		if e := tx.Rollback(); e != nil {
+			log.Printf("prepare rollback error: %v\n", e)
+		}
+		return err
+	}
+	defer stmt.Close()
+	for _, arg := range args {
+		if _, err = stmt.Exec(arg...); err != nil {
+			if e := tx.Rollback(); e != nil {
+				log.Printf("exec rollback error: %v\n", e)
+			}
+			return err
+		}
+	}
+	return tx.Commit()
+}
