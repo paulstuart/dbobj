@@ -378,6 +378,16 @@ func (db DBU) get(members []interface{}, query string, args ...interface{}) erro
 	return nil
 }
 
+// DB returns the *sql.DB
+func (db DBU) DB() *sql.DB {
+	wrap, ok := db.dbs.(sqlWrapper)
+	if !ok {
+		log.Printf("wrong type: %T", db.dbs)
+		return nil
+	}
+	return wrap.db
+}
+
 // InsertMany inserts multiple records as a single transaction
 func (db DBU) InsertMany(query string, args ...[]interface{}) error {
 	wrap, ok := db.dbs.(sqlWrapper)
