@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/paulstuart/sqlite"
 	"github.com/pkg/errors"
 )
 
@@ -43,22 +44,6 @@ type DBS interface {
 	Query(fn SetHandler, query string, args ...interface{}) error
 	Exec(query string, args ...interface{}) (RowsAffected, LastInsertID int64, err error)
 }
-
-/*
-// fragment to rethink code structure
-func commonQuery(rows Common, fn SetHandler) error {
-	for rows.Next() {
-		dest := fn()
-		if dest == nil {
-			return ErrNilWritePointers
-		}
-		if err := rows.Scan(dest...); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-*/
 
 type sqlWrapper struct {
 	db *sql.DB
@@ -104,46 +89,6 @@ func (db DBU) debugf(msg string, args ...interface{}) {
 		db.log.Printf(msg, args...)
 	}
 }
-
-/*
-	DBU.Load(Loader, keys...)
-
-*/
-
-/*
-// Rows is copied from rqlite
-type Rows struct {
-	Columns []string        `json:"columns,omitempty"`
-	Types   []string        `json:"types,omitempty"`
-	Values  [][]interface{} `json:"values,omitempty"`
-	Error   string          `json:"error,omitempty"`
-	Time    float64         `json:"time,omitempty"`
-}
-
-type Loader interface {
-	// SQLGet generates a plain SQL query
-	// (no placeholders or parameter binding)
-	SQLGet(keys ...interface{}) string
-	SQLResults(values ...interface{}) error
-	// generate query string
-	// run query
-	// apply query results to object
-}
-*/
-
-/*
- query := myObj.SQLGet(id)
- results := qyObj.
-*/
-
-//
-// ***** rqlite ******
-//
-// generate plain text (no binding) queries
-// Need to generate plain text (no binding) queries
-/*
-func (m *myObj) (
-*/
 
 // DBObject provides methods for object storage
 // The functions are generated for each object
@@ -416,4 +361,12 @@ func (db DBU) InsertMany(query string, args ...[]interface{}) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// Close shuts down the database
+func (db DBU) Close() {
+	if d := db.DB(); d != nil {
+		sqlite.Close(d)
+		db.dbs = nil
+	}
 }
