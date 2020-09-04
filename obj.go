@@ -6,6 +6,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/paulstuart/sqlite"
@@ -76,17 +77,29 @@ func (s sqlWrapper) Exec(query string, args ...interface{}) (rowsAffected, lastI
 // DBU is a DatabaseUnit
 type DBU struct {
 	dbs DBS
+	mu  sync.RWMutex
 	log *log.Logger
 }
 
-// SetLogger sets the logger for the db
-func (db DBU) SetLogger(logger *log.Logger) {
-	db.log = logger
+func (du *DBU) Exec(query string, args ...interface{}) (rowsAffected, lastInsertID int64, err error) {
+	var result sql.Result
+	db := du.DB()
+	du.mu.Lock()
+	result, err = db.Exec(query, args...)
+	du.mu.Unlock()
+	rowsAffected, _ = result.RowsAffected()
+	lastInsertID, _ = result.LastInsertId()
+	return
 }
 
-func (db DBU) debugf(msg string, args ...interface{}) {
-	if db.log != nil {
-		db.log.Printf(msg, args...)
+// SetLogger sets the logger for the db
+func (du *DBU) SetLogger(logger *log.Logger) {
+	du.log = logger
+}
+
+func (du *DBU) debugf(msg string, args ...interface{}) {
+	if du.log != nil {
+		du.log.Printf(msg, args...)
 	}
 }
 
@@ -197,10 +210,10 @@ func deleteQuery(o DBObject) string {
 }
 
 // Add new object to datastore
-func (db DBU) Add(o DBObject) error {
+func (du *DBU) Add(o DBObject) error {
 	args := o.InsertValues()
-	db.debugf(insertQuery(o), args)
-	_, last_id, err := db.dbs.Exec(insertQuery(o), args...)
+	du.debugf(insertQuery(o), args)
+	_, last_id, err := du.dbs.Exec(insertQuery(o), args...)
 	if err == nil {
 		o.SetID(last_id)
 	}
@@ -208,9 +221,9 @@ func (db DBU) Add(o DBObject) error {
 }
 
 // Replace will replace an existing object in datastore
-func (db DBU) Replace(o DBObject) error {
+func (du *DBU) Replace(o DBObject) error {
 	args := o.InsertValues()
-	_, last_id, err := db.dbs.Exec(replaceQuery(o), args)
+	_, last_id, err := du.dbs.Exec(replaceQuery(o), args)
 	if err != nil {
 		o.SetID(last_id)
 	}
@@ -218,32 +231,32 @@ func (db DBU) Replace(o DBObject) error {
 }
 
 // Save modified object in datastore
-func (db DBU) Save(o DBObject) error {
-	_, _, err := db.dbs.Exec(updateQuery(o), o.UpdateValues()...)
+func (du *DBU) Save(o DBObject) error {
+	_, _, err := du.dbs.Exec(updateQuery(o), o.UpdateValues()...)
 	return err
 }
 
 // Delete object from datastore
-func (db DBU) Delete(o DBObject) error {
-	db.debugf(deleteQuery(o), o.Key())
-	_, _, err := db.dbs.Exec(deleteQuery(o), o.Key())
+func (du *DBU) Delete(o DBObject) error {
+	du.debugf(deleteQuery(o), o.Key())
+	_, _, err := du.dbs.Exec(deleteQuery(o), o.Key())
 	return err
 }
 
 // DeleteByID object from datastore by id
-func (db DBU) DeleteByID(o DBObject, id interface{}) error {
-	db.debugf(deleteQuery(o), id)
-	_, _, err := db.dbs.Exec(deleteQuery(o), id)
+func (du *DBU) DeleteByID(o DBObject, id interface{}) error {
+	du.debugf(deleteQuery(o), id)
+	_, _, err := du.dbs.Exec(deleteQuery(o), id)
 	return err
 }
 
 // List objects from datastore
-func (db DBU) List(list DBList) error {
-	return db.ListQuery(list, "")
+func (du *DBU) List(list DBList) error {
+	return du.ListQuery(list, "")
 }
 
 // Find loads an object matching the given keys
-func (db DBU) Find(o DBObject, keys map[string]interface{}) error {
+func (du *DBU) Find(o DBObject, keys map[string]interface{}) error {
 	where := make([]string, 0, len(keys))
 	what := make([]interface{}, 0, len(keys))
 	for k, v := range keys {
@@ -251,29 +264,29 @@ func (db DBU) Find(o DBObject, keys map[string]interface{}) error {
 		what = append(what, v)
 	}
 	query := fmt.Sprintf("select %s from %s where %s", o.SelectFields(), o.TableName(), strings.Join(where, " and "))
-	return db.get(o.MemberPointers(), query, what...)
+	return du.get(o.MemberPointers(), query, what...)
 }
 
 // FindBy loads an  object matching the given key/value
-func (db DBU) FindBy(o DBObject, key string, value interface{}) error {
+func (du *DBU) FindBy(o DBObject, key string, value interface{}) error {
 	query := fmt.Sprintf("select %s from %s where %s=?", o.SelectFields(), o.TableName(), key)
-	return db.get(o.MemberPointers(), query, value)
+	return du.get(o.MemberPointers(), query, value)
 }
 
 // FindByID loads an object based on a given ID
-func (db DBU) FindByID(o DBObject, value interface{}) error {
-	return db.FindBy(o, o.KeyField(), value)
+func (du *DBU) FindByID(o DBObject, value interface{}) error {
+	return du.FindBy(o, o.KeyField(), value)
 }
 
 // FindSelf loads an object based on it's current ID
-func (db DBU) FindSelf(o DBObject) error {
+func (du *DBU) FindSelf(o DBObject) error {
 	if len(o.KeyField()) == 0 {
 		return ErrNoKeyField
 	}
 	if o.Key() == 0 {
 		return ErrKeyMissing
 	}
-	return db.FindBy(o, o.KeyField(), o.Key())
+	return du.FindBy(o, o.KeyField(), o.Key())
 }
 
 // DBList is the interface for a list of db objects
@@ -284,12 +297,12 @@ type DBList interface {
 
 // ListQuery updates a list of objects
 // TODO: handle args/vs no args for rqlite
-func (db DBU) ListQuery(list DBList, extra string) error {
+func (du *DBU) ListQuery(list DBList, extra string) error {
 	fn := func() []interface{} {
 		return list.Receivers()
 	}
 	query := list.QueryString(extra)
-	return db.dbs.Query(fn, query)
+	return du.dbs.Query(fn, query)
 }
 
 // NewDBU returns a new DBU
@@ -308,14 +321,14 @@ func Placeholders(n int) string {
 }
 
 // get is the low level db wrapper
-func (db DBU) get(members []interface{}, query string, args ...interface{}) error {
-	if db.log != nil {
-		db.log.Printf("Q:%s A:%v\n", query, args)
+func (du *DBU) get(members []interface{}, query string, args ...interface{}) error {
+	if du.log != nil {
+		du.log.Printf("Q:%s A:%v\n", query, args)
 	}
 	fn := func() []interface{} {
 		return members
 	}
-	err := db.dbs.Query(fn, query, args...)
+	err := du.dbs.Query(fn, query, args...)
 	if err != nil {
 		log.Println("error on query: " + query + " -- " + err.Error())
 		return nil
@@ -324,20 +337,20 @@ func (db DBU) get(members []interface{}, query string, args ...interface{}) erro
 }
 
 // DB returns the *sql.DB
-func (db DBU) DB() *sql.DB {
-	wrap, ok := db.dbs.(sqlWrapper)
+func (du *DBU) DB() *sql.DB {
+	wrap, ok := du.dbs.(sqlWrapper)
 	if !ok {
-		log.Printf("wrong type: %T", db.dbs)
+		log.Printf("wrong type: %T", du.dbs)
 		return nil
 	}
 	return wrap.db
 }
 
 // InsertMany inserts multiple records as a single transaction
-func (db DBU) InsertMany(query string, args ...[]interface{}) error {
-	wrap, ok := db.dbs.(sqlWrapper)
+func (du *DBU) InsertMany(query string, args ...[]interface{}) error {
+	wrap, ok := du.dbs.(sqlWrapper)
 	if !ok {
-		return fmt.Errorf("wrong type: %T", db.dbs)
+		return fmt.Errorf("wrong type: %T", du.dbs)
 	}
 	idb := wrap.db
 	tx, err := idb.Begin()
@@ -364,9 +377,9 @@ func (db DBU) InsertMany(query string, args ...[]interface{}) error {
 }
 
 // Close shuts down the database
-func (db DBU) Close() {
-	if d := db.DB(); d != nil {
+func (du *DBU) Close() {
+	if d := du.DB(); d != nil {
 		sqlite.Close(d)
-		db.dbs = nil
+		du.dbs = nil
 	}
 }
