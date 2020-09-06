@@ -94,19 +94,14 @@ const queryCreate = `create table if not exists structs (
     modified   DATETIME DEFAULT CURRENT_TIMESTAMP
 );`
 
-//type testMap map[int64]testStruct
-
-func structDb(t *testing.T) DBS {
+func structDBU(t *testing.T) *DBU {
+	t.Helper()
 	db, err := sqlite.Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	prepare(db)
-	return sqlWrapper{db}
-}
-
-func structDBU(t *testing.T) DBU {
-	return DBU{dbs: structDb(t)}
+	return &DBU{db: db}
 }
 
 func TestFindBy(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -21,8 +20,6 @@ var (
 	ErrKeyMissing = errors.New("key is not set")
 
 	ErrNilWritePointers = errors.New("nil record dest members")
-
-	singleQuote = regexp.MustCompile("'")
 )
 
 // Common Rows object between rqlite and /pkg/database/sql
@@ -46,13 +43,9 @@ type DBS interface {
 	Exec(query string, args ...interface{}) (RowsAffected, LastInsertID int64, err error)
 }
 
-type sqlWrapper struct {
-	db *sql.DB
-}
-
 // Query satisfies DBS interface
-func (s sqlWrapper) Query(fn SetHandler, query string, args ...interface{}) error {
-	rows, err := s.db.Query(query, args...)
+func (du *DBU) Query(fn SetHandler, query string, args ...interface{}) error {
+	rows, err := du.db.Query(query, args...)
 	if err != nil {
 		return err
 	}
@@ -69,24 +62,22 @@ func (s sqlWrapper) Query(fn SetHandler, query string, args ...interface{}) erro
 	return nil
 }
 
-// Exec satisfies DBS interface
-func (s sqlWrapper) Exec(query string, args ...interface{}) (rowsAffected, lastInsertID int64, err error) {
-	return 0, 0, nil
-}
-
-// DBU is a DatabaseUnit
+// DBU is a DataBaseUnit
 type DBU struct {
-	dbs DBS
+	db  *sql.DB
 	mu  sync.RWMutex
 	log *log.Logger
 }
 
 func (du *DBU) Exec(query string, args ...interface{}) (rowsAffected, lastInsertID int64, err error) {
 	var result sql.Result
-	db := du.DB()
+	// All locking should just happen here to avoid races
 	du.mu.Lock()
-	result, err = db.Exec(query, args...)
+	result, err = du.db.Exec(query, args...)
 	du.mu.Unlock()
+	if err != nil {
+		return
+	}
 	rowsAffected, _ = result.RowsAffected()
 	lastInsertID, _ = result.LastInsertId()
 	return
@@ -151,26 +142,6 @@ type DBObject interface {
 	ModifiedBy(int64, time.Time)
 }
 
-// renderedFields is because rqlite doesn't support bind parameters
-func renderedFields(values ...interface{}) string {
-	var buf strings.Builder
-	for i, value := range values {
-		if i > 0 {
-			buf.WriteString(", ")
-		}
-		switch value := value.(type) {
-		case string:
-			value = singleQuote.ReplaceAllString(value, "''")
-			buf.WriteString("'")
-			buf.WriteString(fmt.Sprint(value))
-			buf.WriteString("'")
-		default:
-			buf.WriteString(fmt.Sprint(value))
-		}
-	}
-	return buf.String()
-}
-
 func insertFields(o DBObject) string {
 	list := strings.Split(o.InsertFields(), ",")
 	keep := make([]string, 0, len(list))
@@ -191,8 +162,7 @@ func setParams(params string) string {
 }
 
 func insertQuery(o DBObject) string {
-	//p := placeholders(len(o.InsertValues()))
-	p := renderedFields(o.InsertValues())
+	p := Placeholders(len(o.InsertValues()))
 	return fmt.Sprintf("insert into %s (%s) values(%s)", o.TableName(), insertFields(o), p)
 }
 
@@ -212,8 +182,9 @@ func deleteQuery(o DBObject) string {
 // Add new object to datastore
 func (du *DBU) Add(o DBObject) error {
 	args := o.InsertValues()
-	du.debugf(insertQuery(o), args)
-	_, last_id, err := du.dbs.Exec(insertQuery(o), args...)
+	query := insertQuery(o)
+	du.debugf("Q: %s A: %v\n", query, args)
+	_, last_id, err := du.Exec(query, args...)
 	if err == nil {
 		o.SetID(last_id)
 	}
@@ -223,7 +194,7 @@ func (du *DBU) Add(o DBObject) error {
 // Replace will replace an existing object in datastore
 func (du *DBU) Replace(o DBObject) error {
 	args := o.InsertValues()
-	_, last_id, err := du.dbs.Exec(replaceQuery(o), args)
+	_, last_id, err := du.Exec(replaceQuery(o), args)
 	if err != nil {
 		o.SetID(last_id)
 	}
@@ -232,21 +203,21 @@ func (du *DBU) Replace(o DBObject) error {
 
 // Save modified object in datastore
 func (du *DBU) Save(o DBObject) error {
-	_, _, err := du.dbs.Exec(updateQuery(o), o.UpdateValues()...)
+	_, _, err := du.Exec(updateQuery(o), o.UpdateValues()...)
 	return err
 }
 
 // Delete object from datastore
 func (du *DBU) Delete(o DBObject) error {
-	du.debugf(deleteQuery(o), o.Key())
-	_, _, err := du.dbs.Exec(deleteQuery(o), o.Key())
+	du.debugf("Q: %s  A: %v\n", deleteQuery(o), o.Key())
+	_, _, err := du.Exec(deleteQuery(o), o.Key())
 	return err
 }
 
 // DeleteByID object from datastore by id
 func (du *DBU) DeleteByID(o DBObject, id interface{}) error {
 	du.debugf(deleteQuery(o), id)
-	_, _, err := du.dbs.Exec(deleteQuery(o), id)
+	_, _, err := du.Exec(deleteQuery(o), id)
 	return err
 }
 
@@ -302,13 +273,14 @@ func (du *DBU) ListQuery(list DBList, extra string) error {
 		return list.Receivers()
 	}
 	query := list.QueryString(extra)
-	return du.dbs.Query(fn, query)
+	return du.Query(fn, query)
 }
 
 // NewDBU returns a new DBU
-func NewDBU(file string, init bool, opener SQLDB) (DBU, error) {
+func NewDBU(file string, init bool, opener SQLDB) (*DBU, error) {
 	db, err := opener(file)
-	return DBU{dbs: sqlWrapper{db}}, err
+	//return &DBU{dbs: sqlWrapper{db}}, err
+	return &DBU{db: db}, err
 }
 
 // Placeholders is a helper to generate sql values placeholders
@@ -322,13 +294,11 @@ func Placeholders(n int) string {
 
 // get is the low level db wrapper
 func (du *DBU) get(members []interface{}, query string, args ...interface{}) error {
-	if du.log != nil {
-		du.log.Printf("Q:%s A:%v\n", query, args)
-	}
+	du.debugf("Q: %s A:%v\n", query, args)
 	fn := func() []interface{} {
 		return members
 	}
-	err := du.dbs.Query(fn, query, args...)
+	err := du.Query(fn, query, args...)
 	if err != nil {
 		log.Println("error on query: " + query + " -- " + err.Error())
 		return nil
@@ -338,22 +308,12 @@ func (du *DBU) get(members []interface{}, query string, args ...interface{}) err
 
 // DB returns the *sql.DB
 func (du *DBU) DB() *sql.DB {
-	wrap, ok := du.dbs.(sqlWrapper)
-	if !ok {
-		log.Printf("wrong type: %T", du.dbs)
-		return nil
-	}
-	return wrap.db
+	return du.db
 }
 
 // InsertMany inserts multiple records as a single transaction
 func (du *DBU) InsertMany(query string, args ...[]interface{}) error {
-	wrap, ok := du.dbs.(sqlWrapper)
-	if !ok {
-		return fmt.Errorf("wrong type: %T", du.dbs)
-	}
-	idb := wrap.db
-	tx, err := idb.Begin()
+	tx, err := du.db.Begin()
 	if err != nil {
 		return err
 	}
@@ -378,8 +338,8 @@ func (du *DBU) InsertMany(query string, args ...[]interface{}) error {
 
 // Close shuts down the database
 func (du *DBU) Close() {
-	if d := du.DB(); d != nil {
-		sqlite.Close(d)
-		du.dbs = nil
+	if du.db != nil {
+		sqlite.Close(du.db)
+		du.db = nil
 	}
 }
