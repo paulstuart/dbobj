@@ -180,17 +180,6 @@ var _ = time.Now()
 	}
 }
 
-// helper to generate sql values placeholders
-/*
-func Placeholders(n int) string {
-	a := make([]string, n)
-	for i := range a {
-		a[i] = "?"
-	}
-	return strings.Join(a, ",")
-}
-*/
-
 // isDirectory reports whether the named file is a directory.
 func isDirectory(name string) bool {
 	info, err := os.Stat(name)
@@ -250,7 +239,6 @@ func (g *Generator) parsePackageDir(directory string) {
 
 // parsePackageFiles parses the package occupying the named files.
 func (g *Generator) parsePackageFiles(names []string) {
-	//fmt.Println("PARSE", names)
 	g.parsePackage(".", names, nil)
 }
 
@@ -307,7 +295,6 @@ func (pkg *Package) check(fs *token.FileSet, astFiles []*ast.File) {
 		Error: func(e error) {
 			//fmt.Println("PKG ERR:", e)
 			err := e.(types.Error)
-			//if strings.HasSuffix(err.Msg, ignore) || strings.Index(err.Msg, "DBObject") > 0 {
 			i := strings.Index(err.Msg, "DBObject")
 			if strings.HasSuffix(err.Msg, ignore) || i > 0 {
 				err.Msg = ""
@@ -319,7 +306,6 @@ func (pkg *Package) check(fs *token.FileSet, astFiles []*ast.File) {
 				case strings.Index(err.Msg, "TableName") > 0:
 				default:
 					file := err.Fset.File(err.Pos)
-					//log.Println("POS:", err.Pos, "MSG:", err.Msg, "INDEX:", i, "SOFT:", err.Soft, "FSET:", err.Fset)
 					log.Println("POS:", err.Pos, "MSG:", err.Msg, "INDEX:", i, "SOFT:", err.Soft, "FILE:", file.Name())
 					return
 				}
@@ -394,8 +380,8 @@ func sqlTags(typeName string, fields *ast.FieldList) *SQLInfo {
 				}
 				good = true
 			}
+			// TODO: rething 'audit' feature
 			if audit := tag.Get("audit"); len(audit) > 0 {
-				//fmt.Println("AUDIT:", audit, "N:", string(field.Names[0].Name))
 				switch {
 				case audit == "user":
 					info.UserField = string(field.Names[0].Name)
@@ -665,6 +651,17 @@ const stringNewObj = `func (o %[1]s) NewObj() interface{} {
 }
 
 `
+
+/*
+// Arguments to format are:
+//	[1]: type name
+const stringDBList = `
+
+type %[1]sList []%[1]s
+
+
+`
+*/
 
 // Arguments to format are:
 //	[1]: type name

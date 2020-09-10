@@ -75,7 +75,7 @@ func (du *DBU) Exec(query string, args ...interface{}) (rowsAffected, lastInsert
 	du.mu.Lock()
 	result, err = du.db.Exec(query, args...)
 	du.mu.Unlock()
-	if err != nil {
+	if err != nil || result == nil {
 		return
 	}
 	rowsAffected, _ = result.RowsAffected()
@@ -342,4 +342,9 @@ func (du *DBU) Close() {
 		sqlite.Close(du.db)
 		du.db = nil
 	}
+}
+
+// row returns one row of the results of a query
+func row(db *sql.DB, dest []interface{}, query string, args ...interface{}) error {
+	return db.QueryRow(query, args...).Scan(dest...)
 }
