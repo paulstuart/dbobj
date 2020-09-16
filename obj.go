@@ -1,3 +1,4 @@
+// Package dbobj provides a simple ORM-like framework for SQLite and derivatives
 package dbobj
 
 import (
@@ -19,6 +20,7 @@ var (
 	// ErrKeyMissing is returned when key value is not set
 	ErrKeyMissing = errors.New("key is not set")
 
+	// ErrNilWritePointers is returned when a list handler returns a nil slice
 	ErrNilWritePointers = errors.New("nil record dest members")
 )
 
@@ -36,10 +38,19 @@ type SQLDB func(string) (*sql.DB, error)
 // If there are no values to set it returns a nil instead
 type SetHandler func() []interface{}
 
+type ListHandler interface {
+	Receivers() []interface{}
+	Ready()
+}
+
 // DBS is an abstracted database interface, intended to work
 // with both rqlite and regular sql.DB connections
 type DBS interface {
+	// Query takes a SetHandler, which returns a slice of pointers to the members of a struct
+	// It is incumbant upon the caller to build a slice and pass receivers to build a list
 	Query(fn SetHandler, query string, args ...interface{}) error
+
+	// Exec models the standard Golang exec but with direct values returned
 	Exec(query string, args ...interface{}) (RowsAffected, LastInsertID int64, err error)
 }
 
@@ -58,6 +69,26 @@ func (du *DBU) Query(fn SetHandler, query string, args ...interface{}) error {
 		if err = rows.Scan(dest...); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// MakeList is an alternative list creation interface
+func (du *DBU) MakeList(h ListHandler, query string, args ...interface{}) error {
+	rows, err := du.db.Query(query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		dest := h.Receivers()
+		if dest == nil {
+			return ErrNilWritePointers
+		}
+		if err = rows.Scan(dest...); err != nil {
+			return err
+		}
+		h.Ready()
 	}
 	return nil
 }
@@ -131,7 +162,7 @@ type DBObject interface {
 	// InsertValues returns the values of the object to be inserted
 	InsertValues() []interface{}
 
-	// InsertValues returns the values of the object to be updated
+	// UpdateValues returns the values of the object to be updated
 	UpdateValues() []interface{}
 
 	// MemberPointers  returns a slice of pointers to values
@@ -283,13 +314,16 @@ func NewDBU(file string, init bool, opener SQLDB) (*DBU, error) {
 	return &DBU{db: db}, err
 }
 
-// Placeholders is a helper to generate sql values placeholders
+// Placeholders returns SQLite values placeholders
 func Placeholders(n int) string {
-	a := make([]string, n)
-	for i := range a {
-		a[i] = "?"
+	var b strings.Builder
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString("?")
 	}
-	return strings.Join(a, ",")
+	return b.String()
 }
 
 // get is the low level db wrapper
@@ -342,9 +376,4 @@ func (du *DBU) Close() {
 		sqlite.Close(du.db)
 		du.db = nil
 	}
-}
-
-// row returns one row of the results of a query
-func row(db *sql.DB, dest []interface{}, query string, args ...interface{}) error {
-	return db.QueryRow(query, args...).Scan(dest...)
 }

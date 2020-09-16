@@ -66,8 +66,8 @@ import (
 // For testing
 //go:generate ./dbgen -output generated_test.go -type testStruct struct_test.go
 var (
-	typeNames = flag.String("type", "", "comma-separated list of type names; leave blank for all")
-	output    = flag.String("output", "", "output file name; default srcdir/db_wrapper.go")
+	typeNames  = flag.String("type", "", "comma-separated list of type names; leave blank for all")
+	outputFile = flag.String("output", "db_generated.go", "output file name")
 )
 
 const (
@@ -169,7 +169,7 @@ var _ = time.Now()
 	src := g.format()
 
 	// Write to file.
-	outputName := *output
+	outputName := *outputFile
 	if outputName == "" {
 		baseName := "db_generated.go"
 		outputName = filepath.Join(dir, strings.ToLower(baseName))
@@ -227,7 +227,11 @@ func (g *Generator) parsePackageDir(directory string) {
 		log.Fatalf("cannot process directory %s: %s", directory, err)
 	}
 	var names []string
-	names = append(names, pkg.GoFiles...)
+	for _, file := range pkg.GoFiles {
+		if file != *outputFile {
+			names = append(names, file)
+		}
+	}
 	debugf("dir files: %v\n", names)
 	//fmt.Println("NAMES", names)
 	names = append(names, pkg.CgoFiles...)
